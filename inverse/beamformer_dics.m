@@ -191,27 +191,26 @@ else
 end
 
 isrankdeficient = (rank(Cf)<size(Cf,1));
+rankCf = rank(Cf);
 
 % it is difficult to give a quantitative estimate of lambda, therefore also
 % support relative (percentage) measure that can be specified as string (e.g. '10%')
 if ~isempty(lambda) && ischar(lambda) && lambda(end)=='%'
   ratio = sscanf(lambda, '%f%%');
   ratio = ratio/100;
-  lambda = ratio * trace(Cf)/size(Cf,1);
+  if ~isempty(subspace) && numel(subspace)>1,
+    lambda = ratio * trace(subspace*Cf*subspace')./size(subspace,1);
+  else
+    lambda = ratio * trace(Cf)/size(Cf,1);
+  end
 end
 
 if projectnoise
-  % estimate the noise power, which is further assumed to be equal and uncorrelated over channels
-  if isrankdeficient
-    % estimated noise floor is equal to or higher than lambda
-    noise = lambda;
-  else
-    % estimate the noise level in the covariance matrix by the smallest singular value
+    % estimate the noise level in the covariance matrix by the smallest (non-zero) singular value
     noise = svd(Cf);
-    noise = noise(end);
+    noise = noise(rankCf);
     % estimated noise floor is equal to or higher than lambda
     noise = max(noise, lambda);
-  end
 end
 
 % the inverse only has to be computed once for all dipoles
@@ -254,7 +253,7 @@ elseif ~isempty(subspace)
     Cf       = s(1:subspace,1:subspace);
     % this is equivalent to subspace*Cf*subspace' but behaves well numerically
     % by construction.
-    invCf    = diag(1./diag(Cf));
+    invCf    = diag(1./diag(Cf + lambda * eye(size(Cf))));
     subspace = u(:,1:subspace)';
     if ~isempty(dat), dat = subspace*dat; end
     
@@ -268,9 +267,9 @@ elseif ~isempty(subspace)
     % the singular vectors of Cy, so we have to do the sandwiching as opposed
     % to line 216
     if strcmp(realfilter, 'yes')
-      invCf = pinv(real(Cf));
+      invCf = pinv(real(Cf) + lambda * eye(size(Cf)));
     else
-      invCf = pinv(Cf);
+      invCf = pinv(Cf + lambda * eye(size(Cf)));
     end
     
     if strcmp(submethod, 'dics_refchan')
